@@ -28,6 +28,9 @@
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/public/session.h"
 #include "tensorflow/core/util/command_line_flags.h"
+#include "tensorflow/core/platform/load_library.h"
+
+#include "tfp_ops.h"
 
 using namespace tensorflow;
 using namespace tensorflow::ops;
@@ -60,6 +63,14 @@ Tensor ShapeTensor(const TensorShape &ts) {
 		vec.push_back(ts.dim_size(i));
 	}
 	return AsTensor<int64>(vec);
+}
+
+Tensor ShapeTensor32(const TensorShape &ts) {
+	std::vector<int32> vec;
+	for(int i = 0; i < ts.dims(); i++) {
+		vec.push_back((int32)ts.dim_size(i));
+	}
+	return AsTensor<int32>(vec);
 }
 
 void PrintTensorDim(const Tensor& T)
@@ -105,10 +116,13 @@ public:
 	model() = delete;
 
 	model(std::vector<int64> inputS): in_shape(inputS), root(Scope::NewRootScope()),
-		session(NewSession(SessionOptions())) {
+		session(NewSession(SessionOptions())), ff(float(0.1)), fzz(float(0.0)) {
 		PartialTensorShape shape(inputS);
 		input_ph = Placeholder(root, DT_FLOAT); //, Placeholder::Shape(shape));
 		y_labels = Placeholder(root, DT_FLOAT);
+		
+		void *h;
+		TF_CHECK_OK(internal::LoadLibrary("./tfp_ops.so", &h));
 	}
 
 	~model() { }
@@ -233,8 +247,8 @@ public:
 		for(int i = 0; i < r; i++) {
 			int pred = 0, label = 0;
 			for(int j = 1; j < c; j++) {
-				if(m_y(i, j) > m_y(i, j-1)) label = j;
-				if(m_p(i, j) > m_p(i, j-1)) pred = j;
+				if(m_y(i, j) > m_y(i, label)) label = j;
+				if(m_p(i, j) > m_p(i, pred)) pred = j;
 			}
 			if(pred == label) corr++;
 		}
@@ -290,6 +304,9 @@ public:
 
 	Output	tmp;
 
+	const Input::Initializer ff;
+	const Input::Initializer fzz;
+
 	std::unique_ptr<tensorflow::Session> session;
 };
 
@@ -322,8 +339,10 @@ public:
 		
 		std::cout << "calling conv2d operator 1!" << std::endl;
 
-		Input::Initializer f(float(0.1));
- 		auto w_init = Assign(m.root, w, Mul(m.root, RandomUniform(m.root, ShapeTensor(w_shape), DT_FLOAT), f));
+		//Input::Initializer f(float(0.1));
+		auto f = Const(m.root, m.ff);
+ 		//auto w_init = Assign(m.root, w, Mul(m.root, RandomUniform(m.root, ShapeTensor(w_shape), DT_FLOAT), f));
+		auto w_init = Assign(m.root, w, XavierInitializer(m.root, ShapeTensor(w_shape), DT_FLOAT));
 		/* Input::Initializer means(float(0.0));
 		Input::Initializer stdevs(float(0.1)); 
 		Input::Initializer minvals(float(-0.5));
@@ -333,7 +352,10 @@ public:
 
 		Tensor b_zeros(DT_FLOAT, {filter_shape[2]});
 		FillVal<float>(&b_zeros, 0.0);
-		auto b_init = Assign(m.root, b, b_zeros);
+		//auto b_init = Assign(m.root, b, b_zeros);
+		//Input::Initializer fz(float(0.0));
+		auto fz = Const(m.root, m.fzz);
+		auto b_init = Assign(m.root, b, Mul(m.root, RandomUniform(m.root, ShapeTensor({filter_shape[2]}), DT_FLOAT), fz));
 
 		std::cout << "calling conv2d operator 2!" << std::endl;
 
@@ -473,8 +495,10 @@ public:
 
 		m.addRegularization(L2Loss(m.root, w));
 
-		Input::Initializer f(float(0.1));
-		auto w_init = Assign(m.root, w, Mul(m.root, RandomUniform(m.root, {shape.dim_size(1), units}, DT_FLOAT), f));
+		//Input::Initializer f(float(0.1));
+		auto f = Const(m.root, m.ff);
+		//auto w_init = Assign(m.root, w, Mul(m.root, RandomUniform(m.root, {shape.dim_size(1), units}, DT_FLOAT), f));
+		auto w_init = Assign(m.root, w, XavierInitializer(m.root, {shape.dim_size(1), units}, DT_FLOAT));
 		/* Input::Initializer means(float(0.0));
 		Input::Initializer stdevs(float(0.1)); 
 		Input::Initializer minvals(float(-0.5));
@@ -486,7 +510,11 @@ public:
 
 		Tensor b_zeros(DT_FLOAT, {units});
 		FillVal<float>(&b_zeros, 0.0);
-		auto b_init = Assign(m.root, b, b_zeros);	
+		//auto b_init = Assign(m.root, b, b_zeros);	
+		//Input::Initializer fz(float(0.0));
+		auto fz = Const(m.root, m.fzz);
+		auto b_init = Assign(m.root, b, Mul(m.root, RandomUniform(m.root, ShapeTensor({units}), DT_FLOAT), fz));
+
 		m.addInitializer(b_init);
 		
 		std::cout << "dense2d apply activation " << std::endl;

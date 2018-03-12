@@ -3,8 +3,8 @@
 
 using namespace tfplus;
 
-#define BATCH_SIZE 32
-#define EPOCHS 200
+#define BATCH_SIZE 64
+#define EPOCHS 50
 
 //int64 BATCH_SIZE = 16;
 
@@ -59,13 +59,16 @@ Status ReadTensorFromImageFile(const string& file_name, const int input_height,
 	// Subtract the mean and divide by the scale.
 	//Div(root.WithOpName(output_name), Sub(root, resized, {input_mean}), {input_std});
 	const float one = 1.0;
-	if(unstack) {
+	//auto one = Const(root, {1.0});
+	/* if(unstack) {
 		auto normalized = Sub(root, Div(root, Sub(root, resized, {input_mean}), {input_std}), {one});
 		Unstack(root.WithOpName(output_name), normalized, 1);
 	} else {
 		auto normalized = Sub(root.WithOpName(output_name), 
-						  Div(root, Sub(root, resized, {input_mean}), {input_std}), {one});
-	}
+							Div(root, Sub(root, resized, {input_mean}), {input_std}), {one});
+	} */
+	auto normalized = Normalizer(root, resized, DT_FLOAT);
+	Unstack(root.WithOpName(output_name), normalized, 1);
 
 	// This runs the GraphDef network definition that we've just constructed, and
 	// returns the results in the output tensor.
@@ -191,9 +194,9 @@ int main(int argc, char *argv[])
 				 elu(),
 				 flatten(), 
 				 dense2d(1164, activation::Elu),
-				 //dense2d(100, activation::Elu),
-				 dense2d(50, activation::Non),
-				 //dense2d(10, activation::Non),
+				 dense2d(100, activation::Elu),
+				 dense2d(50, activation::Elu),
+				 dense2d(10, activation::Elu),
 				 dense2d(3, activation::Non),
 				 //tfplus::tanh()
 				 softmax()
