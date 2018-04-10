@@ -4,7 +4,7 @@
 using namespace tfplus;
 
 #define BATCH_SIZE 64
-#define EPOCHS 50
+#define EPOCHS 15
 
 //int64 BATCH_SIZE = 16;
 
@@ -243,13 +243,31 @@ int main(int argc, char *argv[])
 		accu /= bnum;
 		std::cout << "training loss for epoch " << i << " is " << loss;
 		std::cout << " cost " << err;
-		std::cout << " accuracy " << accu << std::endl;
+		std::cout << " accuracy " << accu; // << std::endl;
 
+		int v_bnum = (int)((tldata.size()*0.2)/BATCH_SIZE);
+		float val_acc = 0;
+		for(int k = 0; k < v_bnum; k++) {
+			int start = train_num + k*BATCH_SIZE;
+			
+			std::vector<Tensor> outputs;
+			GetBatch(BATCH_SIZE, start, tldata, outputs);
+
+			const Tensor& images = outputs[0];
+			const Tensor& labels = outputs[1];
+
+			float acc = m.validate(images, labels);
+			val_acc += acc;
+		}
+		val_acc /= v_bnum;
+		std::cout << " validation accuracy is " << val_acc << std::endl;
+	
+#if 0
 		int32 input_width = 128;
 		int32 input_height = 96;
 		float input_mean = 127.5;
 		float input_std  = 127.5;
-#if 0
+
 		int corr = 0;
 		for(int j = train_num; j < tldata.size(); j++) {
 			std::vector<Tensor> resized_tensors;

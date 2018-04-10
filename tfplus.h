@@ -260,6 +260,31 @@ public:
 		return {outputs[0].scalar<float>()(0), outputs[1].scalar<float>()(0), accu};
 	}
 
+	float validate(const Tensor &x, const Tensor &y)
+	{
+		std::vector<Tensor> outputs;
+		
+		TF_CHECK_OK(session->Run({{input_ph.name(), x}, {y_labels.name(), y}}, {out_node.name()},
+								{}, &outputs));
+
+		auto m_y = y.matrix<float>();
+		auto m_p = outputs[0].matrix<float>();
+
+		int corr = 0;
+		int r = y.shape().dim_size(0);
+		int c = y.shape().dim_size(1);
+		for(int i = 0; i < r; i++) {
+			int pred = 0, label = 0;
+			for(int j = 1; j < c; j++) {
+				if(m_y(i, j) > m_y(i, label)) label = j;
+				if(m_p(i, j) > m_p(i, pred)) pred = j;
+			}
+			if(pred == label) corr++;
+		}
+
+		return float((float)corr/r);
+	}
+
 	// given an image, predict its class, p is score, idx is indice (class)
 	void predict(const Tensor &x, float &p, int &idx)
 	{
